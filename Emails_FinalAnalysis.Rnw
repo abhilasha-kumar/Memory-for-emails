@@ -1,40 +1,36 @@
-\documentclass[a4paper]{article}
-\usepackage{Sweave}
+\documentclass[letterpaper]{article}
+\usepackage[a4paper, total={7in, 8in}]{geometry}
+
+\usepackage{xcolor}
+\usepackage{Sweavel}
+\usepackage{graphicx}
 \usepackage{fixltx2e}
-\usepackage{booktabs}
-\usepackage{longtable}
-\usepackage{array}
-\usepackage{multirow}
-\usepackage[table]{xcolor}
-\usepackage{wrapfig}
-\usepackage{float}
-\usepackage{colortbl}
-\usepackage{pdflscape}
-\usepackage{tabu}
-\usepackage{threeparttable}
-\usepackage[margin=1.0in]{geometry}
+\def\Sweavesize{\normalsize}
+% Uncomment some of the following to use some alternatives:
+\def\Rcolor{\color{black}}
+\def\Routcolor{\color{blue}}
+\def\Rcommentcolor{\color{black}}
+\definecolor{babyblueeyes}{rgb}{0.94, 0.97, 1.0}
 
- \DefineVerbatimEnvironment{Sinput}{Verbatim} { frame = lines, fontshape = sl}
-\DefineVerbatimEnvironment{Soutput}{Verbatim}{frame=lines, fontshape = sl}
+% To change background color or R code and/or output, use e.g.:
+\def\Rbackground{\color{babyblueeyes}}
+\def\Routbackground{\color[gray]{.8}}
 
-\title{Intensive Data Analysis II}
+% To use rgb specifications use \color[rgb]{ , , }
+% To use gray scale use e.g. \color[gray]{0.5}
+% If you change any of these after the first chunk is produced, the
+% changes will have effect only for the next chunk.
+
+\title{Memory for Emails: Analysis}
 \author{Abhilasha Kumar}
-<<echo=FALSE>>=
-options(width=60)
-library(xtable)
-library(ggplot2)
-library(ggthemes)
-library(tidyr)
-library(sjPlot)
-library(lme4)
-library(plyr)
-library(dplyr)
-@
+
 \begin{document}
-\SweaveOpts{concordance=TRUE}
+\SweaveOpts{concordance=FALSE}
+
  \maketitle
 
-\section {Reading the Data}
+\section*{Reading the Data File}
+
 
 <<>>=
 cell_demo = read.csv("cell_demo.csv", header = TRUE, sep = ",")
@@ -76,9 +72,9 @@ cell = cell %>% mutate(acc_pc = Accuracy - acc_mean,
                  sent_pc = Sentiment - sent_mean)
 @
 
-\section {Centered Multiple Predictors}
+\section {Recipient Name Accuracy Models}
 
-\subsection*{Time and Messages}
+\subsection*{Adding Time and Messages}
 
 <<>>=
 cell$scaledDays = cell$Days/100
@@ -95,9 +91,9 @@ summary(acc_pred_3_1)
 fixed_eff = fixef(acc_pred_3_1)
 
 odds = exp(fixed_eff)
-x = confint(acc_pred_3_1)
+#x = confint(acc_pred_3_1)
 
-exp(x)
+#exp(x)
 ## CONFINT
 
 #  2.5 %     97.5 %
@@ -116,14 +112,14 @@ acc_pred_4 = glmer(data = cell, Accuracy ~ scaledDays + scaled_m_mean +
 
 summary(acc_pred_4)
 
-anova(acc_pred_3_1, acc_pred_4)
+anova(acc_pred_3_1, acc_pred_4) ## only marginally better, hence choosing simpler model
 @
 
-\section {Graphing the Models}
+\section {Plotting the Model for Naming Accuracy}
 
-\subsection*{Naming Accuracy}
+The final model for accuracy is accpred3, with time and messagespc and messagesmean. We are going to try and plot the fitted values from this model below:
 
-The final model for accuracy is acc_pred_4, with time and messagespc and messagesmean. We are going to try and plot the fitted values from this model below:
+
 <<echo=FALSE, fig=TRUE>>=
 fixed.frame <- cell %>%
   summarise(mean_pc = mean(scaled_m_pc, na.rm = T), 
@@ -165,26 +161,34 @@ fixed.frame %>%
           plot.title = element_text(face = "bold", size = rel(1), hjust = .5))
 @
 
+\section {Model for Temporal Dating Error}
+
 <<>>=
-##creatng a factor term for naming accuracy
-cell$acc_fac = as.factor(as.character(cell$Accuracy))
+## removing trials in which participant did not provide time estimate
 
 cell_td = cell %>% filter(GuessedMonth != "-1")
 library(optimx)
 @
 
 
-\section {TimeModel}
 
 <<>>=
 library(lme4)
 library(lmerTest)
 
-time_model_7 = lmer(data = cell_td, TimeJudgmentDistance ~ scaledDays + 
+time_model_0 = lmer(data = cell_td, TimeJudgmentDistance ~ scaledDays + 
+                       (1|ID),
+     control = lmerControl(optimizer = "optimx", calc.derivs = FALSE,
+     optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE)))
+summary(time_model_0)
+
+time_model_1 = lmer(data = cell_td, TimeJudgmentDistance ~ scaledDays + 
                        (scaledDays|ID),
      control = lmerControl(optimizer = "optimx", calc.derivs = FALSE,
      optCtrl = list(method = "nlminb", starttests = FALSE, kkt = FALSE)))
-summary(time_model_7)
+summary(time_model_1)
+
+anova(time_model_0, time_model_1) ### model with random slope better
 
 cell_td = cell_td %>% 
   mutate(DatingErrorType = ifelse(DatingError >0 , "Telescoping", "Time Expansion"))
@@ -192,19 +196,19 @@ cell_td = cell_td %>%
 cell_td$DatingErrorType = as.factor(as.character(cell_td$DatingErrorType))
 
 
-time_model_8 = lmer(data = cell_td, TimeJudgmentDistance ~ 
+time_model_2 = lmer(data = cell_td, TimeJudgmentDistance ~ 
                       scaledDays*DatingErrorType + 
                       (scaledDays|ID) + (1|ItemNo))
 
-anova(time_model_8, time_model_7) ## model with telescoping better
-confint(time_model_8)
+anova(time_model_1, time_model_2) ## model with telescoping better
+#confint(time_model_2)
 
-time_model_9 = lmer(data = cell_td, TimeJudgmentDistance ~ 
+time_model_3 = lmer(data = cell_td, TimeJudgmentDistance ~ 
                       scaledDays*DatingErrorType*Sentiment + 
                        (scaledDays|ID) + (1|ItemNo))
-summary(time_model_9)
+summary(time_model_3)
 
-anova(time_model_8, time_model_9)
+anova(time_model_2, time_model_3) ## model with interaction better
 
 # > confint(time_model_9)
 # Computing profile confidence intervals ...
@@ -225,14 +229,15 @@ anova(time_model_8, time_model_9)
 
 @
 
-<<>>=
+\subsection {Plotting Temporal Model 2}
+<<echo=FALSE, fig=TRUE>>=
 fixed.frame <- 
   data.frame(
     expand.grid(
       # here, you add values for your time variable and predictors
       scaledDays = seq(0,4,.01),
       DatingErrorType = c( "Telescoping", "Time Expansion"))) %>%
-    mutate(pred = predict(time_model_8, newdata = ., re.form = NA)) 
+    mutate(pred = predict(time_model_2, newdata = ., re.form = NA)) 
 
 fixed.frame$odds = exp(fixed.frame$pred)
 fixed.frame$prob = fixed.frame$odds/(1+fixed.frame$odds)
@@ -262,8 +267,9 @@ cell_td %>%
           plot.title = element_text(face = "bold", size = rel(1), hjust = .5))
 @
 
+\subsection {Plotting Temporal Model 3}
 
-<<>>=
+<<echo=FALSE, fig=TRUE>>=
 fixed.frame <- cell_td %>%
   summarise(mean_sent = mean(Sentiment, na.rm = T), 
             sd_sent = sd(Sentiment, na.rm = T))
@@ -277,7 +283,7 @@ fixed.frame <-
                      fixed.frame$mean_sent,
                      fixed.frame$mean_sent+fixed.frame$sd_sent),
       DatingErrorType = c( "Telescoping", "Time Expansion"))) %>%
-    mutate(pred = predict(time_model_9, newdata = ., re.form = NA)) 
+    mutate(pred = predict(time_model_3, newdata = ., re.form = NA)) 
 
 library(ggplot2)
 library(ggthemes)
@@ -307,12 +313,9 @@ fixed.frame %>%
           plot.title = element_text(face = "bold", size = rel(1.5), hjust = .5))
 @
 
+\section {Descriptive Graphs: Error Judgments}
 
-
-
-\section {Descriptive Graphs}
-
-<<>>=
+<<echo=FALSE, fig=TRUE>>=
 desc_cell = read.csv("cell_descdata.csv", header = TRUE, sep = ",")
 library(dplyr)
 errors =  group_by(desc_cell, wrongAnswerReason) %>%
@@ -324,12 +327,11 @@ errors_subject = group_by(desc_cell, uid, wrongAnswerReason) %>%
 total = sum(errors$n)
 
 errors$percent = errors$n/total
-library(Rmisc)
-errors_plot = summarySE(errors_subject, 
+errors_plot = Rmisc::summarySE(errors_subject, 
                       measurevar = "n",
                       groupvars = c("wrongAnswerReason"))
 
-errors_plot_r = summarySE(errors_subject, 
+errors_plot_r = Rmisc::summarySE(errors_subject, 
                       measurevar = "n")
 
 
@@ -357,7 +359,7 @@ errors_plot %>% mutate(ErrorType = factor(wrongAnswerReason,
 
 \section {Retrieval States}
 
-<<>>=
+<<echo=FALSE, fig=TRUE>>=
 library(dplyr)
 cell_state = group_by(cell, ID, Month, RecallBeforeHint) %>%
   summarise(Count = n())
@@ -389,25 +391,7 @@ state_plot = cell_state %>%
           axis.title = element_text(face = "bold", size = rel(1.2)),
           legend.title = element_text(face = "bold", size = rel(1.2)),
           plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
-
-
 state_plot 
-
-library(nnet)
-library(dplyr)
-
-cell$state = as.factor(cell$RecallBeforeHint)
-cell_state_model = nnet::multinom(data = cell, 
-                         state ~ Month)
-summary(cell_state_model)
-car::Anova(cell_state_model)
-
-
-plot_data <- effects::effect("Month", 
-                                    cell_state_model,
- xlevels = list(Month = 1:12))
- plot(plot_data)
-
 @
 
 
